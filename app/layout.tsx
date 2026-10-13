@@ -204,6 +204,15 @@ export default async function RootLayout({ children }: LayoutProps<"/">) {
           <Analytics />
           <AdSenseVerification />
           <AdSense />
+          {/* ScriptWrapper ad tag — loads async, no consent gate needed */}
+          {/* eslint-disable-next-line @next/next/no-sync-scripts */}
+          <script
+            type="text/javascript"
+            async
+            data-noptimize="1"
+            data-cfasync="false"
+            src="//scripts.scriptwrapper.com/tags/08307c3b-23d7-443b-8649-104164322ac8.js"
+          />
         </ConsentProvider>
       </body>
     </html>
