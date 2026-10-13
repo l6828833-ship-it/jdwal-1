@@ -108,6 +108,18 @@ export interface PopularLeague {
    * because bare names collide across countries.
    */
   aliases: string[];
+  /**
+   * Name match that runs BEFORE the youth/women's/qualifier exclusions, for a
+   * curated competition whose name necessarily contains one of those markers
+   * (AFCON U20 contains "تحت 20"). Used when the backend gives it no stable id.
+   */
+  namePattern?: RegExp;
+  /**
+   * Only fixtures involving a marquee nation are shown (see
+   * lib/marquee-nations.ts). For international friendlies, where most of the
+   * ~50 games on a window day are between small nations.
+   */
+  marqueeOnly?: boolean;
 }
 
 /**
@@ -143,7 +155,7 @@ export interface PopularLeague {
  * name and rank for any source that does carry them.
  */
 export const POPULAR_LEAGUES: PopularLeague[] = [
-  // --- 0. Major international tournament (shown only while it runs) --------
+  // --- 0. Major international tournaments (shown only while they run) ------
   {
     key: "world-cup",
     slug: "world-cup",
@@ -152,6 +164,21 @@ export const POPULAR_LEAGUES: PopularLeague[] = [
     highlightlyId: 0,
     apiFootballId: 1,
     aliases: ["fifa world cup", "world cup"],
+  },
+  /**
+   * UEFA Nations League — European national-team competition, runs every
+   * two years in the autumn. ID 852142 verified from the live fixture feed.
+   * Placed right after the World Cup: it is a major international tournament
+   * and sits naturally here before the club competitions.
+   */
+  {
+    key: "uefa-nations-league",
+    slug: "uefa-nations-league",
+    ar: "دوري الأمم الأوروبية",
+    ids: [852142],
+    highlightlyId: 0,
+    apiFootballId: 852142,
+    aliases: ["uefa nations league", "nations league"],
   },
 
   // --- 1. European: the cups first, then the big five leagues -------------
@@ -265,10 +292,15 @@ export const POPULAR_LEAGUES: PopularLeague[] = [
     ids: [52695, 61],
     highlightlyId: 52695,
     apiFootballId: 61,
-    aliases: ["ligue 1"],
+    /**
+     * Deliberately NOT a bare "ligue 1": Senegal's top flight (backend id
+     * 810917) is also named just "Ligue 1", and the bare alias gave it France's
+     * name and rank. France is matched by id 61, so the qualifier costs nothing.
+     */
+    aliases: ["french ligue 1"],
   },
 
-  // --- 2. Arab: Saudi first, then the rest --------------------------------
+  // --- 2. Arab: Saudi first, then Gulf Cup, then the rest ----------------
   {
     key: "saudi-pro-league",
     slug: "saudi-pro-league",
@@ -277,6 +309,31 @@ export const POPULAR_LEAGUES: PopularLeague[] = [
     highlightlyId: 262041,
     apiFootballId: 307,
     aliases: ["saudi pro league", "saudi professional league"],
+  },
+  /**
+   * Gulf Cup — pinned here, after the Saudi Pro League and before the other
+   * Arab country leagues. It is a Gulf national-team tournament (biennial,
+   * ~2 weeks), so it belongs in the Arab section rather than above the European
+   * competitions. `851557` is the active backend's stable id for it, verified
+   * against the live competition page. Arabic aliases cover sources that number
+   * it differently; "خليجي" matches "خليجي 26" and similar edition names.
+   * Youth and women's editions cannot inherit this rank — `YOUTH_OR_SECONDARY`
+   * rejects "للشباب", "شباب" and "الناشئين" before alias matching runs.
+   */
+  {
+    key: "gulf-cup",
+    slug: "gulf-cup",
+    ar: "كأس الخليج",
+    ids: [851557],
+    highlightlyId: 0,
+    apiFootballId: 851557,
+    aliases: [
+      "كأس الخليج",
+      "خليجي",
+      "arabian gulf cup",
+      "gulf cup of nations",
+      "gulf cup",
+    ],
   },
   {
     key: "egypt",
@@ -358,6 +415,56 @@ export const POPULAR_LEAGUES: PopularLeague[] = [
     highlightlyId: 0,
     apiFootballId: 6,
     aliases: ["africa cup of nations", "afcon"],
+  },
+  /**
+   * AFCON qualifiers — ID 862144 verified from the live fixture feed.
+   * Placed directly after the AFCON tournament itself: qualifiers are its
+   * feeder round and follow naturally. The Arabic name matches the backend's
+   * own Arabic string for the competition.
+   */
+  {
+    key: "afcon-qualifiers",
+    slug: "afcon-qualifiers",
+    ar: "تصفيات كأس أمم إفريقيا",
+    ids: [862144],
+    highlightlyId: 0,
+    apiFootballId: 862144,
+    aliases: ["afcon qualifiers", "africa cup of nations qualifying", "تصفيات أمم إفريقيا"],
+  },
+  /**
+   * AFCON U20. The backend serves it on a derived id that has not been seen in
+   * the feed yet, so it is matched by name — and by `namePattern`, because its
+   * name contains "تحت 20" / "U20", which the youth filters would otherwise
+   * reject. Women's editions are excluded inside the pattern.
+   */
+  {
+    key: "afcon-u20",
+    slug: "afcon-u20",
+    ar: "كأس أمم إفريقيا تحت 20",
+    ids: [],
+    highlightlyId: 0,
+    apiFootballId: 0,
+    aliases: [],
+    namePattern:
+      /^(?!.*(سيدات|نساء|women))(?=.*(تحت\s*(ال)?-?\s*20|\bu-?20\b))(?=.*(كأس\s*(أمم|الأمم)\s*(إفريقيا|أفريقيا|الأفريقية|الإفريقية)|africa(n)?\s*(cup of nations|u-?20 championship)|\bafcon\b))/i,
+  },
+
+  // --- 2b. International friendlies, marquee nations only -----------------
+  //
+  // Below the Arab leagues and the AFCON family, above the long tail. Only
+  // fixtures with a big European, an Arab, or a Latin American nation are
+  // shown — see `marqueeOnly` and lib/marquee-nations.ts. 866215 is the
+  // backend's id for "المباريات الودية الدولية", verified from the live feed.
+  // Club friendlies (809497) and youth/women's friendlies stay hidden.
+  {
+    key: "international-friendlies",
+    slug: "international-friendlies",
+    ar: "المباريات الودية الدولية",
+    ids: [866215],
+    highlightlyId: 0,
+    apiFootballId: 866215,
+    aliases: [],
+    marqueeOnly: true,
   },
 
   // --- 3. A widely-followed extra, above the long alphabetical tail -------
@@ -664,7 +771,11 @@ const YOUTH_OR_SECONDARY = new RegExp(
 export function matchesLeagueId(entry: PopularLeague, leagueId: number): boolean {
   switch (activeProvider()) {
     case "selfhosted":
-      return entry.apiFootballId === leagueId;
+      // `0` means "no id asserted for this competition" (see the Gulf Cup entry),
+      // so it must never match. Without this guard a backend competition arriving
+      // as id 0 would inherit an unrelated entry's name and rank — the same class
+      // of bug as the FA Cup/Champions League collision described above.
+      return entry.apiFootballId > 0 && entry.apiFootballId === leagueId;
     case "highlightly":
       return entry.highlightlyId > 0 && entry.highlightlyId === leagueId;
     default:
@@ -769,7 +880,17 @@ const NOT_CARRIED = new RegExp(
  */
 export function isCarriedLeague(leagueId: number, leagueName: string): boolean {
   if (isPinnedLeague(leagueId)) return true;
-  return !NOT_CARRIED.test(normalize(leagueName));
+  const name = normalize(leagueName);
+  if (patternRank(name) !== null) return true;
+  return !NOT_CARRIED.test(name);
+}
+
+/** Rank of the first entry whose `namePattern` matches, else null. */
+function patternRank(normalizedName: string): number | null {
+  for (let i = 0; i < POPULAR_LEAGUES.length; i++) {
+    if (POPULAR_LEAGUES[i].namePattern?.test(normalizedName)) return i;
+  }
+  return null;
 }
 
 export function isPinnedLeague(leagueId: number): boolean {
@@ -795,7 +916,13 @@ export function leagueSlug(leagueId: number): string | null {
 export function leagueIdFromSlug(slug: string): number | null {
   const wanted = slug.trim().toLowerCase();
   const entry = POPULAR_LEAGUES.find((league) => league.slug === wanted);
-  return entry ? entry.apiFootballId : null;
+  // An entry with no asserted id (apiFootballId 0) has no competition page to
+  // resolve to. Returning 0 here would render `/league/<slug>` against id 0 and
+  // produce a permanently empty page on a real, linkable URL, so the slug is
+  // reported as unclaimed instead and the route 404s. Such an entry is still
+  // pinned for ranking and grouping, which works by name.
+  if (!entry || entry.apiFootballId <= 0) return null;
+  return entry.apiFootballId;
 }
 
 /**
@@ -823,11 +950,15 @@ export function leagueSlugRedirects(): Array<{
   destination: string;
   permanent: true;
 }> {
-  return POPULAR_LEAGUES.map((league) => ({
-    source: `/league/${league.apiFootballId}`,
-    destination: `/league/${league.slug}`,
-    permanent: true,
-  }));
+  return POPULAR_LEAGUES
+    // Entries with no asserted id (apiFootballId 0) have no numeric URL to
+    // redirect FROM, and `/league/0` is not a real competition page.
+    .filter((league) => league.apiFootballId > 0)
+    .map((league) => ({
+      source: `/league/${league.apiFootballId}`,
+      destination: `/league/${league.slug}`,
+      permanent: true,
+    }));
 }
 
 export function leaguePopularity(
@@ -840,6 +971,13 @@ export function leaguePopularity(
     if (matchesLeagueId(POPULAR_LEAGUES[i], leagueId)) {
       return { rank: i, entry: POPULAR_LEAGUES[i] };
     }
+  }
+
+  // Curated competitions whose names contain a youth marker (AFCON U20) are
+  // matched explicitly before the youth exclusion below.
+  const byPattern = patternRank(name);
+  if (byPattern !== null) {
+    return { rank: byPattern, entry: POPULAR_LEAGUES[byPattern] };
   }
 
   // A youth / women's / qualifying edition must not borrow a senior

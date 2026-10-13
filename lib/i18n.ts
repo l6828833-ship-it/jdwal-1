@@ -125,6 +125,14 @@ export const t = {
   standingsComputedNote:
     "يُحسب هذا الجدول من نتائج مباريات دور المجموعات فقط، ولا يشمل الأدوار التمهيدية. الفرق التي لم تلعب بعد تظهر بصفر.",
   standingsNotStarted: "لم تبدأ مباريات دور المجموعات بعد",
+  /**
+   * Fallback header for a group whose source table carries no name — used when
+   * a qualifier-style competition splits into several tables but labels none of
+   * them. "المجموعة 1", "المجموعة 2", …
+   */
+  standingsGroupPrefix: "المجموعة",
+  /** Group header for teams that played only in a preliminary round. */
+  standingsPreliminaryGroup: "الدور التمهيدي",
   standingsFixturesPending:
     "لم يتم إعلان مباريات دور المجموعات بعد. سيظهر الجدول تلقائياً عند توفر المباريات، ولا تُحتسب الأدوار التمهيدية فيه.",
   colPosition: "#",
@@ -219,7 +227,7 @@ export const t = {
    * Homepage search copy, based on the site's real Search Console queries:
    * jdwal, jdwel, موقع جدول, and jdwel مباريات اليوم.
    */
-  seoTitle: "موقع جدول مباريات اليوم ونتائج مباشرة | jdwal - jdwel",
+  seoTitle: "جدول مباريات اليوم | مواعيد المباريات والنتائج المباشرة - Jdwal",
   /** The homepage h1. Short enough for the header bar, and the primary term. */
   seoHeadingShort: "جدول مباريات اليوم",
   seoHeading: "موقع جدول مباريات اليوم ونتائج مباشرة",
@@ -246,8 +254,8 @@ export const t = {
   seoLinkPlayers: "بحث اللاعبين",
   /** Shared by the page description and the WebPage structured data. */
   seoMetaDescription:
-    "موقع جدول jdwal، ويُكتب أيضاً jdwel، لمتابعة جدول مباريات اليوم والغد " +
-    "والنتائج المباشرة وترتيب الدوريات والهدافين بتوقيت بلدك.",
+    "تابع جدول مباريات اليوم ومواعيد أهم مباريات كرة القدم مع النتائج المباشرة، " +
+    "القنوات الناقلة، التشكيلات والإحصائيات. جميع المباريات في مكان واحد على Jdwal.",
 } as const;
 
 /** Arabic names for leagues outside the pinned popular list. */
@@ -745,6 +753,15 @@ function stripClubNoise(value: string): string {
     .trim();
 }
 
+/**
+ * Arabic names for backend competitions whose source name is ambiguous on its
+ * own. Keyed by the backend's stable (derived) id, since the name alone cannot
+ * tell them apart from a bigger league with the same name.
+ */
+const LEAGUE_NAME_BY_ID: Record<number, string> = {
+  810917: "الدوري السنغالي", // named just "Ligue 1" upstream
+};
+
 /** Arabic league name, falling back to the provider's name. */
 export function leagueNameAr(leagueId: number, original: string): string {
   // Matched in the ACTIVE provider's numbering only — see `matchesLeagueId`. The
@@ -753,6 +770,8 @@ export function leagueNameAr(leagueId: number, original: string): string {
   for (const league of POPULAR_LEAGUES) {
     if (matchesLeagueId(league, leagueId)) return league.ar;
   }
+  const byId = LEAGUE_NAME_BY_ID[leagueId];
+  if (byId) return byId;
 
   const name = normalize(original);
 

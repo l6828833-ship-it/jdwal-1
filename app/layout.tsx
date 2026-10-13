@@ -2,7 +2,7 @@ import type { Metadata, Viewport } from "next";
 import { Cairo } from "next/font/google";
 import "./globals.css";
 import { Analytics } from "@/components/analytics";
-import { AdSense } from "@/components/adsense";
+import { AdSense, AdSenseVerification } from "@/components/adsense";
 import { BottomNav } from "@/components/bottom-nav";
 import { ConsentProvider } from "@/components/consent";
 import { SiteFooter } from "@/components/site-footer";
@@ -33,7 +33,7 @@ export const metadata: Metadata = {
   metadataBase: new URL(SITE_URL),
   title: {
     default: t.seoTitle,
-    template: "%s | موقع جدول - jdwal",
+    template: "%s | جدول مباريات - Jdwal",
   },
   description: t.seoMetaDescription,
   /**
@@ -202,7 +202,17 @@ export default async function RootLayout({ children }: LayoutProps<"/">) {
             <BottomNav />
           </TimezoneProvider>
           <Analytics />
+          <AdSenseVerification />
           <AdSense />
+          {/* ScriptWrapper ad tag — loads async, no consent gate needed */}
+          {/* eslint-disable-next-line @next/next/no-sync-scripts */}
+          <script
+            type="text/javascript"
+            async
+            data-noptimize="1"
+            data-cfasync="false"
+            src="//scripts.scriptwrapper.com/tags/08307c3b-23d7-443b-8649-104164322ac8.js"
+          />
         </ConsentProvider>
       </body>
     </html>

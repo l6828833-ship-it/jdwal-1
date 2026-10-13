@@ -44,7 +44,7 @@ import {
   resetBudget,
 } from "./cache";
 import { countryCode, isNonNationalRegion } from "./countries";
-import { leagueNameAr, stageAr, teamNameAr } from "./i18n";
+import { leagueNameAr, stageAr, t, teamNameAr } from "./i18n";
 import { resolveBroadcast } from "./broadcast";
 import { compareMatches } from "./grouping";
 import { leaguePopularity } from "./config";
@@ -1165,17 +1165,31 @@ export async function getLeagueStandings(
   /**
    * Flatten the per-group tables, keeping each row's group label.
    *
-   * The label is what makes a cup table readable: without it the Champions
-   * League league phase and its groups collapse into one ranking where position
-   * 1 appears several times. Every previous provider discarded it.
+   * The label is what makes a multi-table competition readable: without it the
+   * groups collapse into one list where "1" appears once per group and the
+   * ranking is nonsense (observed on the AFCON qualifiers page).
+   *
+   * The label comes from `row.group` when the source populates it (the usual
+   * case for a named league phase or "Group A"). But qualifier-style
+   * competitions frequently leave `row.group` EMPTY and encode the split only
+   * in the standings ARRAY structure — one sub-array per group. So when there
+   * is more than one sub-array and the rows carry no label, the sub-array index
+   * is used to synthesise one ("المجموعة 1", "المجموعة 2", …). A single
+   * sub-array stays unlabelled, so an ordinary league table is never split.
    */
+  const tables = raw.standings ?? [];
+  const multiTable = tables.length > 1;
   const rows: StandingRow[] = [];
-  for (const group of raw.standings ?? []) {
+  tables.forEach((group, groupIndex) => {
     for (const row of group ?? []) {
+      const sourceLabel = row.group?.trim() || null;
+      const group_ =
+        sourceLabel ??
+        (multiTable ? `${t.standingsGroupPrefix} ${groupIndex + 1}` : null);
       rows.push({
         position: row.rank ?? 0,
         team: normalizeTeam(row.team, leagueCountry),
-        group: row.group?.trim() || null,
+        group: group_,
         zoneLabel: row.description?.trim() || null,
         zone: classifyZone(row.description),
         played: num(row.all?.played),
@@ -1190,13 +1204,18 @@ export async function getLeagueStandings(
         points: num(row.points),
       });
     }
-  }
+  });
 
   return {
     standings: {
       league,
       seasonYear: raw.league?.season ?? seasonYear,
-      rows,
+      // A table the app cannot render honestly is dropped, so the page shows
+      // fixtures only instead of a misleading ranking. See `isRenderableTable`.
+      rows: (() => {
+        const repaired = repairPartialGroups(rows);
+        return isRenderableTable(repaired) ? repaired : [];
+      })(),
       // API-Football's own table, which already accounts for point deductions
       // and keeps qualifying rounds in separate groups. No derivation needed.
       source: "provider",
@@ -1208,6 +1227,75 @@ export async function getLeagueStandings(
       cached.error,
     ),
   };
+}
+
+/**
+ * Make a partially grouped table fully grouped, so it renders as group tables.
+ *
+ * AFCON qualifiers arrive with every group-stage row labelled ("المجموعة أ" …)
+ * plus a few rows with NO label — teams knocked out in the preliminary round,
+ * ranked 39–42 with 0 games in the group stage. Those few unlabelled rows were
+ * enough to stop the renderer splitting the table (it needs every row
+ * labelled). The labelled rows carry the backend's own accurate stats, so they
+ * are kept as-is:
+ *
+ *   • unlabelled rows that never played are dropped — they are not part of the
+ *     group stage at all;
+ *   • unlabelled rows that DID play are kept under a "preliminary round" group
+ *     rather than silently discarded.
+ */
+function repairPartialGroups(rows: StandingRow[]): StandingRow[] {
+  const grouped = rows.filter((r) => r.group);
+  if (grouped.length === 0 || grouped.length === rows.length) return rows;
+  const ungrouped = rows.filter((r) => !r.group);
+  if (ungrouped.every((r) => (r.played ?? 0) === 0)) return grouped;
+  return rows.map((r) =>
+    r.group ? r : { ...r, group: t.standingsPreliminaryGroup },
+  );
+}
+
+/**
+ * Can these rows be shown as an honest standings table?
+ *
+ * Some competitions (e.g. AFCON qualifiers) come back as ONE flat array that
+ * silently merges several groups: the backend drops the per-group tables and
+ * the `group`/`description` labels, leaving only a global `rank` that runs
+ * 39, 40, 41, 42, 1, 2, 3, 4, 1, 2, 3, 4 … There is no signal left to split it
+ * back into groups, so rendering it as a single league table shows repeated
+ * "#1"s and a nonsensical order (reported live on تصفيات كأس أمم إفريقيا).
+ *
+ * When the table is grouped (rows carry a `group` label) it renders fine and is
+ * always allowed. Otherwise a single ungrouped table is only trustworthy when
+ * its positions form a clean 1..N run with no repeats — the shape of a real
+ * league table. A duplicated position is the fingerprint of flattened groups,
+ * and such a table is suppressed so the page falls back to fixtures only.
+ */
+function isRenderableTable(rows: StandingRow[]): boolean {
+  if (rows.length === 0) return false;
+
+  const withGroup = rows.filter((r) => r.group).length;
+
+  // Fully grouped (every row labelled): a real multi-group table. The renderer
+  // splits it into one sub-table per group, so it is trustworthy.
+  if (withGroup === rows.length) return true;
+
+  // PARTIALLY grouped is the AFCON-qualifiers shape: a handful of preliminary
+  // rows with no group (ranked 39,40,41,42) prepended to the real groups. It
+  // cannot be shown as one honest ranking and the renderer cannot split it
+  // (it needs every row labelled), so it is suppressed — the page falls back to
+  // fixtures only. This is the case the user reported.
+  if (withGroup > 0) return false;
+
+  // Fully ungrouped: only trustworthy as a clean 1..N run with no repeats. A
+  // duplicated position, or a run that does not start at 1, is a flattened /
+  // sliced multi-group list, not a league table.
+  const positions = rows.map((r) => r.position);
+  const seen = new Set<number>();
+  for (const p of positions) {
+    if (seen.has(p)) return false;
+    seen.add(p);
+  }
+  return Math.min(...positions) <= 1;
 }
 
 // ---------------------------------------------------------------------------
